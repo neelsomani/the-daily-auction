@@ -27,18 +27,24 @@ require_env CF_DOMAIN_EDITOR
 ACM_REGION="${ACM_REGION:-us-east-1}"
 ACM_CERT_ARN="${ACM_CERT_ARN:-${ACM_CERT_ARN_PREVIEW:-}}"
 
-AWS_REGION_LOWER="${AWS_REGION,,}"
+AWS_REGION_LOWER="$(printf "%s" "$AWS_REGION" | tr '[:upper:]' '[:lower:]')"
 
 print_validation_records() {
   local cert_arn="$1"
   echo "DNS validation records (add these CNAMEs):"
-  aws acm describe-certificate --region "$ACM_REGION" --certificate-arn "$cert_arn" \
-    --query 'Certificate.DomainValidationOptions[].ResourceRecord' --output text | \
-    while read -r name type value; do
-      if [ -n "$name" ] && [ -n "$type" ] && [ -n "$value" ]; then
-        echo "- $name $type $value"
-      fi
-    done
+  local output
+  output="$(aws acm describe-certificate --region "$ACM_REGION" --certificate-arn "$cert_arn" \
+    --query 'Certificate.DomainValidationOptions[].ResourceRecord' --output text)"
+  if [ -z "$output" ] || [ "$output" = "None" ]; then
+    echo "(not available yet) re-run after a minute with:"
+    echo "aws acm describe-certificate --region $ACM_REGION --certificate-arn $cert_arn --query 'Certificate.DomainValidationOptions[].ResourceRecord' --output text"
+    return
+  fi
+  printf "%s\n" "$output" | while read -r name type value; do
+    if [ -n "$name" ] && [ -n "$type" ] && [ -n "$value" ]; then
+      echo "- $name $type $value"
+    fi
+  done
 }
 
 if [ -z "${ACM_CERT_ARN:-}" ]; then
@@ -49,8 +55,13 @@ if [ -z "${ACM_CERT_ARN:-}" ]; then
     --query 'CertificateArn' --output text)"
 
   echo "Requested ACM cert: $cert_arn"
-  print_validation_records "$cert_arn"
-  echo "After validation, set ACM_CERT_ARN to this ARN and re-run."
+  echo "Ensure AWS credentials are set in your environment before running AWS CLI commands."
+  echo "DNS validation records are not immediate. Wait a minute, then run:"
+  echo "aws acm describe-certificate --region $ACM_REGION --certificate-arn $cert_arn --query 'Certificate.DomainValidationOptions[].ResourceRecord' --output text"
+  echo "Add those CNAMEs in your DNS provider to validate the cert."
+  echo "To check status:"
+  echo "aws acm describe-certificate --region $ACM_REGION --certificate-arn $cert_arn --query 'Certificate.Status' --output text"
+  echo "After it is ISSUED, set ACM_CERT_ARN to this ARN and re-run."
   exit 0
 fi
 
