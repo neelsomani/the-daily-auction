@@ -1,0 +1,43 @@
+services:
+  codex:
+    build:
+      context: codex
+    ports:
+      - "8080:8080"
+    volumes:
+      - codex_site:/app/site
+    environment:
+      CODEX_PORT: 8080
+      DEPLOY_INTERNAL_URL: http://deploy:9090
+      SITE_DIR: /app/site
+      MASTER_WALLET: ${MASTER_WALLET}
+      MAX_REQUESTS_PER_WALLET_PER_DAY: ${MAX_REQUESTS_PER_WALLET_PER_DAY:-50}
+    depends_on:
+      - deploy
+
+  deploy:
+    build:
+      context: deploy
+    expose:
+      - "9090"
+    volumes:
+      - codex_site:/app/codex_site:ro
+      - baseline_site:/app/baseline
+      - ./site-template:/app/template:ro
+    environment:
+      DEPLOY_PORT: 9090
+      CODEX_RESET_URL: http://codex:8080/reset
+      CODEX_SITE_DIR: /app/codex_site
+      TEMPLATE_DIR: /app/template
+      BASELINE_DIR: /app/baseline
+      ENABLE_GIT_HISTORY: ${ENABLE_GIT_HISTORY:-false}
+      AWS_REGION: ${AWS_REGION:-us-east-1}
+      S3_BUCKET_PREVIEW: ${S3_BUCKET_PREVIEW}
+      S3_BUCKET_PROD: ${S3_BUCKET_PROD}
+      AWS_ACCESS_KEY_ID: ${AWS_ACCESS_KEY_ID}
+      AWS_SECRET_ACCESS_KEY: ${AWS_SECRET_ACCESS_KEY}
+      AWS_SESSION_TOKEN: ${AWS_SESSION_TOKEN}
+
+volumes:
+  codex_site:
+  baseline_site:

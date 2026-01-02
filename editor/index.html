@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Daily Auction Editor</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main>
+      <header>
+        <p class="kicker">The Daily Auction</p>
+        <h1>Editor Console</h1>
+        <p class="subhead">Connect your wallet and send edit, deploy, or nuke commands.</p>
+      </header>
+
+      <section class="panel">
+        <div class="row">
+          <div>
+            <p class="label">Wallet</p>
+            <p id="walletStatus" class="value">Not connected</p>
+          </div>
+          <button id="connectBtn" class="primary">Connect Wallet</button>
+        </div>
+        <div class="row">
+          <label class="label" for="apiBase">Codex API base</label>
+          <input id="apiBase" type="text" value="http://localhost:8080" data-prod="https://api.thedailyauction.com" />
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="row">
+          <p class="label">Preview</p>
+          <button id="refreshBtn">Refresh Preview</button>
+        </div>
+        <iframe
+          id="previewFrame"
+          class="preview-frame"
+          title="Preview site"
+          src="https://preview.thedailyauction.app"
+          data-base="https://preview.thedailyauction.app"
+        ></iframe>
+      </section>
+
+      <section class="panel">
+        <label class="label" for="instruction">Instruction</label>
+        <textarea id="instruction" rows="5" placeholder="Describe the edit you want..."></textarea>
+        <div class="actions">
+          <button id="editBtn" class="primary">Send Edit</button>
+          <button id="deployBtn">Deploy to Prod</button>
+          <button id="nukeBtn" class="danger">Nuke</button>
+        </div>
+      </section>
+
+      <section class="panel log">
+        <p class="label">Activity</p>
+        <div id="log"></div>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>

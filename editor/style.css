@@ -1,0 +1,153 @@
+:root {
+  color-scheme: light;
+  font-family: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  background: radial-gradient(circle at top, #efe6d6 0%, #d6c4aa 45%, #bfa98c 100%);
+  color: #1b1b1b;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 64px 24px 96px;
+}
+
+header {
+  margin-bottom: 32px;
+}
+
+.kicker {
+  text-transform: uppercase;
+  letter-spacing: 0.3em;
+  font-size: 12px;
+  margin: 0 0 12px;
+}
+
+h1 {
+  margin: 0 0 8px;
+  font-size: 44px;
+}
+
+.subhead {
+  margin: 0;
+  font-size: 18px;
+  color: #5b4c3f;
+}
+
+.panel {
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(77, 58, 44, 0.2);
+  border-radius: 18px;
+  padding: 20px 24px;
+  margin-bottom: 24px;
+  box-shadow: 0 10px 30px rgba(50, 32, 18, 0.12);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.label {
+  font-size: 12px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #5c4a38;
+  margin-bottom: 8px;
+}
+
+.value {
+  font-size: 16px;
+  margin: 0;
+  color: #2c241b;
+}
+
+input,
+textarea {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(77, 58, 44, 0.3);
+  padding: 12px;
+  font-size: 15px;
+  background: #fffdf8;
+  color: #2c241b;
+}
+
+textarea {
+  resize: vertical;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 12px;
+}
+
+.preview-frame {
+  width: 100%;
+  height: 520px;
+  border-radius: 16px;
+  border: 1px solid rgba(77, 58, 44, 0.2);
+  background: #fffdf8;
+}
+
+button {
+  border-radius: 999px;
+  border: 1px solid #6b563f;
+  background: transparent;
+  padding: 10px 18px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+button.primary {
+  background: #2c241b;
+  color: #fffaf2;
+  border-color: #2c241b;
+}
+
+button.danger {
+  border-color: #a1331e;
+  color: #a1331e;
+}
+
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 14px rgba(44, 36, 27, 0.15);
+}
+
+.log {
+  font-family: "IBM Plex Mono", "Courier New", monospace;
+  font-size: 13px;
+  background: rgba(25, 18, 10, 0.85);
+  color: #f8f1e7;
+}
+
+#log {
+  white-space: pre-wrap;
+  min-height: 140px;
+}
+
+@media (max-width: 720px) {
+  .row {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  h1 {
+    font-size: 34px;
+  }
+}
