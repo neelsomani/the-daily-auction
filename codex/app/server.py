@@ -70,9 +70,9 @@ class Handler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", "0"))
         return self.rfile.read(length) if length > 0 else b""
 
-    def _authenticate(self, body: bytes) -> bool:
+    def _authenticate(self, body: bytes, path: str) -> bool:
         headers = {key.lower(): value for key, value in self.headers.items()}
-        ctx = verify_request(headers, body, self.path, nonce_store)
+        ctx = verify_request(headers, body, path, nonce_store)
         if not credit_limiter.allow(ctx.wallet):
             raise ValueError("credit limit exceeded")
         return True
@@ -110,7 +110,8 @@ class Handler(BaseHTTPRequestHandler):
         self._send_json(HTTPStatus.NOT_FOUND, {"error": "not found"})
 
     def do_POST(self) -> None:
-        path = urlparse(self.path).path
+        parsed = urlparse(self.path)
+        path = parsed.path
         body = self._read_body()
 
         if path == "/reset":
@@ -118,7 +119,7 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         try:
-            self._authenticate(body)
+            self._authenticate(body, path)
         except ValueError as exc:
             self._send_json(HTTPStatus.UNAUTHORIZED, {"error": str(exc)})
             return

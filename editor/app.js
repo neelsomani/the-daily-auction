@@ -79,25 +79,18 @@ async function sha256Hex(text) {
   return bufferToHex(digest);
 }
 
-function base58Encode(bytes) {
-  const alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-  let digits = [0];
+function base64Encode(bytes) {
+  if (bytes instanceof ArrayBuffer) {
+    bytes = new Uint8Array(bytes);
+  }
+  if (Array.isArray(bytes)) {
+    bytes = Uint8Array.from(bytes);
+  }
+  let binary = "";
   for (let i = 0; i < bytes.length; i += 1) {
-    let carry = bytes[i];
-    for (let j = 0; j < digits.length; j += 1) {
-      const value = digits[j] * 256 + carry;
-      digits[j] = value % 58;
-      carry = Math.floor(value / 58);
-    }
-    while (carry > 0) {
-      digits.push(carry % 58);
-      carry = Math.floor(carry / 58);
-    }
+    binary += String.fromCharCode(bytes[i]);
   }
-  for (let k = 0; k < bytes.length && bytes[k] === 0; k += 1) {
-    digits.push(0);
-  }
-  return digits.reverse().map((d) => alphabet[d]).join("");
+  return btoa(binary);
 }
 
 async function signPayload(path, body) {
@@ -110,8 +103,17 @@ async function signPayload(path, body) {
   const bodyHash = await sha256Hex(bodyText);
   const message = `${state.publicKey}:${nonce}:${expiry}:${path}:${bodyHash}`;
   const encoded = new TextEncoder().encode(message);
-  const signatureBytes = await state.wallet.signMessage(encoded, "utf8");
-  const signature = base58Encode(signatureBytes);
+  const signed = await state.wallet.signMessage(encoded, "utf8");
+  if (window.DEBUG_SIGNATURE) {
+    const hasSignature = Boolean(signed && signed.signature);
+    const raw = hasSignature ? signed.signature : signed;
+    const rawType = raw && raw.constructor ? raw.constructor.name : typeof raw;
+    const rawLength = raw && raw.length !== undefined ? raw.length : "n/a";
+    console.log("signMessage result", signed);
+    log(`debug: signMessage type=${rawType} length=${rawLength} hasSignature=${hasSignature}`);
+  }
+  let signatureBytes = signed && signed.signature ? signed.signature : signed;
+  const signature = `base64:${base64Encode(signatureBytes)}`;
 
   return {
     headers: {
@@ -138,6 +140,7 @@ async function postCommand(path, body) {
     }
     const apiBase = apiBaseInput.value.trim().replace(/\/$/, "");
     const { headers, bodyText } = await signPayload(path, body);
+
     const response = await fetch(`${apiBase}${path}`, {
       method: "POST",
       headers,
@@ -183,7 +186,7 @@ function renderHistory(items) {
     }
     return `[${time}] ${item.type}`;
   });
-  logEl.textContent = lines.reverse().join("\n");
+  logEl.textContent = lines.join("\n");
 }
 
 async function refreshHistory() {

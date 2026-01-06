@@ -1,3 +1,4 @@
+import base64
 import hashlib
 import os
 import time
@@ -61,7 +62,9 @@ def _signature_message(wallet: str, nonce: str, expiry: int, path: str, body_has
 def _verify_ed25519_signature(wallet: str, signature: str, message: bytes) -> bool:
     try:
         public_key = VerifyKey(base58.b58decode(wallet))
-        signed = base58.b58decode(signature)
+        if not signature.startswith("base64:"):
+            raise ValueError("signature must be base64")
+        signed = base64.b64decode(signature[len("base64:") :])
         public_key.verify(message, signed)
         return True
     except (ValueError, BadSignatureError):
