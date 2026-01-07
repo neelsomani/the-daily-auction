@@ -28,6 +28,18 @@ yarn-error.log*
 .env*.local
 .env
 
+# anchor / solana
+target/
+.anchor/
+
+# python
+__pycache__/
+*.pyc
+
+# lambda packaging
+jobs/auction_settlement/package/
+jobs/auction_settlement/function.zip
+
 # vercel
 .vercel
 

@@ -1,0 +1,9 @@
+[programs.devnet]
+auction = "DtLQpjotSmrKAqk6Sqn16P6dSfKuiXawEyUEgmSmioW6"
+
+[provider]
+cluster = "Devnet"
+wallet = "/Users/neelsomani/.config/solana/auction-operator.json"
+
+[workspace]
+members = ["programs/auction"]

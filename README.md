@@ -41,10 +41,109 @@ Production hosting note:
 - Run `./scripts/publish-editor.sh` to deploy the editor remotely
 - `api.thedailyauction.com` should point to the Codex server (public). Keep Deploy internal-only.
 
-### Required AWS permissions (for setup script)
+5. Deploy the Solana auction program (Anchor)
 
-If you run `scripts/setup-aws.sh` with an IAM user, it needs S3 + CloudFront + ACM permissions.
-You can attach this as an inline policy (adjust bucket names if you changed them):
+Location: `programs/auction`.
+
+Initialize the program ID (generates `target/deploy/auction-keypair.json` if missing
+and updates `Anchor.toml` + `programs/auction/src/lib.rs`):
+
+```sh
+./scripts/init-auction-program.sh
+```
+
+Set your program ID in `.env` (needed for the nightly job below).
+
+Build with:
+
+```sh
+cd programs/auction
+anchor build
+```
+
+Create a deploy wallet (and optionally reuse it as the cranker wallet):
+
+```sh
+solana-keygen new -o ~/.config/solana/auction-operator.json
+```
+
+Then set `CRANKER_PRIVATE_KEY` and `AUCTION_RECIPIENT_PUBKEY` in your `.env`
+(use an absolute path; `~` won’t expand when sourced):
+
+```sh
+CRANKER_PRIVATE_KEY="$(cat /Users/YOUR_USER/.config/solana/auction-operator.json)"
+AUCTION_RECIPIENT_PUBKEY=9ajQ4mq9cxTqTDT8b2LyQGnooAbwgFdPn72xkWdSdj5S
+```
+
+RPC configuration:
+- Anchor uses the cluster in `Anchor.toml` under `[provider]` (e.g. `Devnet` or `Mainnet`).
+- Update the `wallet` field in `Anchor.toml` to point at your deploy keypair.
+- Make sure you point at either devnet or mainnet RPC depending on what you want to do.
+
+Devnet SOL for deploy + cranker wallets:
+
+```sh
+solana config set --url https://api.devnet.solana.com
+solana airdrop 1 ~/.config/solana/auction-operator.json
+solana airdrop 1 /path/to/cranker-keypair.json
+# Request more SOL at https://faucet.solana.com/
+```
+
+If you use the same keypair for deploy and cranker, a single airdrop to that keypair is enough.
+
+Deploy with:
+
+```sh
+cd programs/auction
+anchor deploy
+```
+
+The program implements the spec in `docs/solana-auction-spec.md`.
+
+6. Deploy the nightly settlement job to AWS Lambda
+
+Location: `jobs/auction_settlement`.
+
+The Lambda entrypoint is `jobs/auction_settlement/handler.py`.
+
+Initialize the config (one-time, before running the nightly job):
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r jobs/auction_settlement/requirements.txt
+set -a && source .env && set +a
+python3 scripts/init-auction-config.py
+```
+
+Test the lambda function locally:
+
+```sh
+python3 jobs/auction_settlement/handler.py
+```
+
+Deployment script:
+
+```sh
+./scripts/deploy-auction-lambda.sh
+```
+
+Required env vars:
+- `AUCTION_PROGRAM_ID`
+- `CRANKER_PRIVATE_KEY` (base58 or JSON array secret key - must be in quotes)
+
+Optional env vars:
+- `RPC_URL` (default devnet - match the Anchor deployment above)
+- `MAX_BATCH_SIZE` (default 20)
+- `RETRY_WINDOW_SECONDS` (default 1800)
+- `RETRY_INTERVAL_SECONDS` (default 45)
+- `MAX_RUNTIME_SECONDS` (default 780)
+
+### Required AWS permissions (for setup + Lambda deploy scripts)
+
+Recommended: If you run `scripts/setup-aws.sh` and `scripts/deploy-auction-lambda.sh` with the same IAM user,
+attach a single inline policy that includes S3 + CloudFront + ACM + IAM + Lambda + EventBridge permissions.
+Adjust bucket names and function/role names if you changed them.
 
 ```json
 {
@@ -102,6 +201,38 @@ You can attach this as an inline policy (adjust bucket names if you changed them
       "Effect": "Allow",
       "Action": ["sts:GetCallerIdentity"],
       "Resource": "*"
+    },
+    {
+      "Sid": "IamRoleManagement",
+      "Effect": "Allow",
+      "Action": [
+        "iam:CreateRole",
+        "iam:GetRole",
+        "iam:AttachRolePolicy",
+        "iam:PassRole"
+      ],
+      "Resource": "arn:aws:iam::*:role/AuctionLambdaExecutionRole"
+    },
+    {
+      "Sid": "LambdaManagement",
+      "Effect": "Allow",
+      "Action": [
+        "lambda:CreateFunction",
+        "lambda:GetFunction",
+        "lambda:UpdateFunctionCode",
+        "lambda:UpdateFunctionConfiguration",
+        "lambda:AddPermission"
+      ],
+      "Resource": "arn:aws:lambda:*:*:function:auction-settlement-daily"
+    },
+    {
+      "Sid": "EventBridgeManagement",
+      "Effect": "Allow",
+      "Action": [
+        "events:PutRule",
+        "events:PutTargets"
+      ],
+      "Resource": "*"
     }
   ]
 }
@@ -113,6 +244,8 @@ You can attach this as an inline policy (adjust bucket names if you changed them
 - `deploy`: Internal-only deploy service that owns the baseline and publishes to S3.
 - `site-template`: Baseline static site template for nukes and initialization.
 - `editor`: Static wallet-connected editor UI for local testing.
+- `programs/auction`: Anchor-based Solana auction program.
+- `jobs/auction_settlement`: Python AWS Lambda job for nightly settlement and refunds.
 
 ### Request signing
 
@@ -130,11 +263,6 @@ Message format (bytes):
 ```
 
 Signature verification uses the wallet public key (ed25519) only.
-
-### Editor activity feed
-
-The Codex service exposes `GET /history?limit=200` for the editor UI. It returns
-recent activity entries stored in `site/.codex_history.jsonl`.
 
 ### Notes
 
