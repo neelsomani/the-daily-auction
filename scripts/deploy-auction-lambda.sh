@@ -27,6 +27,19 @@ aws_cli() {
   fi
 }
 
+wait_for_lambda_update() {
+  local name="$1"
+  local status
+  for _ in {1..30}; do
+    status=$(aws_cli lambda get-function-configuration --function-name "$name" --query 'LastUpdateStatus' --output text 2>/dev/null || echo "")
+    if [ "$status" != "InProgress" ] && [ -n "$status" ]; then
+      return 0
+    fi
+    sleep 2
+  done
+  return 1
+}
+
 AWS_USER_ID=$(aws_cli sts get-caller-identity --query 'UserId' --output text 2>/dev/null || echo "")
 ACCOUNT_ID=$(aws_cli sts get-caller-identity --query 'Account' --output text 2>/dev/null || echo "")
 
@@ -113,6 +126,8 @@ if aws_cli lambda get-function --function-name "$LAMBDA_NAME" >/dev/null 2>&1; t
   aws_cli lambda update-function-code \
     --function-name "$LAMBDA_NAME" \
     --zip-file "fileb://$ZIPFILE_PATH"
+
+  wait_for_lambda_update "$LAMBDA_NAME" || true
   
   aws_cli lambda update-function-configuration \
     --function-name "$LAMBDA_NAME" \
