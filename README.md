@@ -139,6 +139,25 @@ Optional env vars:
 - `RETRY_INTERVAL_SECONDS` (default 45)
 - `MAX_RUNTIME_SECONDS` (default 780)
 
+7. Test the public auction website (Next.js)
+
+Location: `public-auction`.
+
+Public site env vars (set in `public-auction/.env.local`):
+- `NEXT_PUBLIC_AUCTION_PROGRAM_ID`
+- `NEXT_PUBLIC_RPC_URL` (default devnet)
+- `NEXT_PUBLIC_DISABLE_SITE`
+
+You can start from `public-auction/.env.local.example`.
+
+Node.js version >= v18.17.0 is required.
+
+```sh
+cd public-auction
+npm install
+npm run dev
+```
+
 ### Required AWS permissions (for setup + Lambda deploy scripts)
 
 Recommended: If you run `scripts/setup-aws.sh` and `scripts/deploy-auction-lambda.sh` with the same IAM user,
@@ -246,6 +265,7 @@ Adjust bucket names and function/role names if you changed them.
 - `editor`: Static wallet-connected editor UI for local testing.
 - `programs/auction`: Anchor-based Solana auction program.
 - `jobs/auction_settlement`: Python AWS Lambda job for nightly settlement and refunds.
+- `public-auction`: Next.js public auction wrapper site.
 
 ### Request signing
 

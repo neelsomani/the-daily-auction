@@ -40,6 +40,11 @@ __pycache__/
 jobs/auction_settlement/package/
 jobs/auction_settlement/function.zip
 
+# nextjs
+public-auction/.next/
+public-auction/node_modules/
+public-auction/.env.local
+
 # vercel
 .vercel
 

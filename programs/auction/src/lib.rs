@@ -85,8 +85,10 @@ pub mod auction {
         require!(!auction_day.finalized, ErrorCode::AlreadyFinalized);
 
         let highest_bid = auction_day.highest_bid;
-        if highest_bid > 0 {
-            let min_increment = ctx.accounts.config.min_increment_lamports;
+        let min_increment = ctx.accounts.config.min_increment_lamports;
+        if highest_bid == 0 {
+            require!(new_amount >= min_increment, ErrorCode::BidTooLow);
+        } else {
             let required = highest_bid
                 .checked_add(min_increment)
                 .ok_or(ErrorCode::MathOverflow)?;

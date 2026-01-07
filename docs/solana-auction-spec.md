@@ -110,7 +110,7 @@ Requirements:
   - `vault_bump` set appropriately
 - Require `AuctionDay.finalized == false`.
 - Enforce increment rule:
-  - If `highest_bid == 0`, allow any `new_amount > 0` (or enforce a minimum opening bid).
+  - If `highest_bid == 0`, require `new_amount >= min_increment`.
   - Else require `new_amount >= highest_bid + min_increment`.
 - Per bidder, store only their latest bid amount in `BidReceipt`.
 - On bid increase, transfer only the delta from bidder to vault.
