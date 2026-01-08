@@ -2,10 +2,18 @@ import "./globals.css";
 import "@solana/wallet-adapter-react-ui/styles.css";
 import Providers from "./providers";
 
+const description =
+  "The website that auctions itself off every day on Solana. Winner controls a Codex agent to edit the website.";
+
 export const metadata = {
   title: "The Daily Auction",
-  description:
-    "The website that auctions itself off every day on Solana. Winner controls a Codex agent to edit the website.",
+  description,
+  twitter: {
+    card: "summary_large_image",
+    title: "The Daily Auction",
+    description,
+    images: ["/twitter-card.png"],
+  },
 };
 
 export default function RootLayout({ children }) {
