@@ -47,8 +47,10 @@ python3 -m http.server 8000
 
 Production hosting note:
 - Deploy Codex + Deploy on a single EC2 instance with Docker Compose (Codex public, Deploy internal-only). Other setups are possible, but EC2 is the assumed default.
+- There is a convenience helper to set things up within the EC2 instance: `sudo DOMAIN=api.thedailyauction.com APP_DIR=/opt/the-daily-auction ./scripts/setup-ec2.sh`
+- `api.thedailyauction.com` should point to the port 443 on the EC2 instance, which forwards to the Codex server.
+- Keep Deploy internal-only.
 - Run `./scripts/publish-editor.sh` to deploy the editor remotely
-- `api.thedailyauction.com` should point to the Codex server (public). Keep Deploy internal-only.
 
 6. Deploy the Solana auction program (Anchor)
 
