@@ -6,8 +6,9 @@ This repo is a monorepo for the Daily Auction system.
 
 ### Setup (AWS + local)
 
-1. Copy `.env.template` to `.env` and fill in the AWS values (buckets, domains, region).
-2. Run the AWS setup script:
+1. If needed: Create IAM user on AWS (details below).
+2. Copy `.env.template` to `.env` and fill in the AWS values (buckets, domains, region).
+3. Run the AWS setup script:
 
 ```sh
 ./scripts/setup-aws.sh
@@ -21,7 +22,7 @@ After `scripts/setup-aws.sh`, it prints the CloudFront domains. Create DNS recor
 - `www.thedailyauction.app` → CNAME to the prod CloudFront domain
 - `editor.thedailyauction.com` → CNAME to the editor CloudFront domain
 
-3. Start local services:
+4. Start local services:
 
 ```sh
 docker compose up --build
@@ -29,7 +30,15 @@ docker compose up --build
 
 Codex listens on `http://localhost:8080`. Deploy listens on the internal Docker network only.
 
-4. Run the editor locally:
+Codex env vars (in `.env`):
+- `OPENAI_API_KEY` (required for HTML-only edits)
+- `HTML_EDIT_MIN_CHARS` (optional, default `200`)
+- `HTML_EDIT_MAX_CHARS` (optional, default `2000000`)
+- `HTML_EDIT_TIMEOUT_SECONDS` (optional, default `180`)
+- `AUCTION_PROGRAM_ID` (required to authorize yesterday's winner)
+- `RPC_URL` (optional, default devnet)
+
+5. Run the editor locally:
 
 ```
 cd editor
@@ -41,7 +50,7 @@ Production hosting note:
 - Run `./scripts/publish-editor.sh` to deploy the editor remotely
 - `api.thedailyauction.com` should point to the Codex server (public). Keep Deploy internal-only.
 
-5. Deploy the Solana auction program (Anchor)
+6. Deploy the Solana auction program (Anchor)
 
 Location: `programs/auction`.
 
@@ -100,7 +109,7 @@ anchor deploy
 
 The program implements the spec in `docs/solana-auction-spec.md`.
 
-6. Deploy the nightly settlement job to AWS Lambda
+7. Deploy the nightly settlement job to AWS Lambda
 
 Location: `jobs/auction_settlement`.
 
@@ -139,7 +148,7 @@ Optional env vars:
 - `RETRY_INTERVAL_SECONDS` (default 45)
 - `MAX_RUNTIME_SECONDS` (default 780)
 
-7. Test the public auction website (Next.js)
+8. Test the public auction website (Next.js)
 
 Location: `public-auction`.
 
@@ -185,11 +194,17 @@ Adjust bucket names and function/role names if you changed them.
       "Action": [
         "cloudfront:CreateDistribution",
         "cloudfront:GetDistribution",
+        "cloudfront:GetDistributionConfig",
         "cloudfront:ListDistributions",
+        "cloudfront:UpdateDistribution",
         "cloudfront:CreateCachePolicy",
         "cloudfront:ListCachePolicies",
         "cloudfront:CreateOriginAccessControl",
-        "cloudfront:ListOriginAccessControls"
+        "cloudfront:ListOriginAccessControls",
+        "cloudfront:ListResponseHeadersPolicies",
+        "cloudfront:CreateResponseHeadersPolicy",
+        "cloudfront:GetResponseHeadersPolicy",
+        "cloudfront:GetResponseHeadersPolicyConfig"
       ],
       "Resource": "*"
     },

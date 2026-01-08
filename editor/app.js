@@ -5,7 +5,6 @@ const state = {
 
 const walletStatus = document.getElementById("walletStatus");
 const connectBtn = document.getElementById("connectBtn");
-const apiBaseInput = document.getElementById("apiBase");
 const instructionInput = document.getElementById("instruction");
 const editBtn = document.getElementById("editBtn");
 const deployBtn = document.getElementById("deployBtn");
@@ -13,12 +12,21 @@ const nukeBtn = document.getElementById("nukeBtn");
 const refreshBtn = document.getElementById("refreshBtn");
 const previewFrame = document.getElementById("previewFrame");
 const logEl = document.getElementById("log");
+const creditStatus = document.getElementById("creditStatus");
+const previewActions = refreshBtn ? refreshBtn.closest(".actions") : null;
+const editActions = editBtn ? editBtn.closest(".actions") : null;
 let historyTimer = null;
+let creditTimer = null;
 let editInFlight = false;
+const editLabel = editBtn ? editBtn.textContent : "Send Edit";
+const refreshLabel = refreshBtn ? refreshBtn.textContent : "Refresh Preview";
+let lastHistorySignature = null;
 
 function log(message) {
   const time = new Date().toISOString();
-  logEl.textContent = `[${time}] ${message}\n` + logEl.textContent;
+  logEl.textContent += `\n[${time}] ${message}`;
+  logEl.textContent = logEl.textContent.trimStart();
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
 function refreshPreview() {
@@ -43,17 +51,82 @@ function getProvider() {
   return null;
 }
 
+function shortenKey(key) {
+  if (!key) return "";
+  return `${key.slice(0, 4)}…${key.slice(-4)}`;
+}
+
+function updateWalletUi() {
+  if (state.publicKey) {
+    connectBtn.textContent = shortenKey(state.publicKey);
+    editBtn.disabled = false;
+    deployBtn.disabled = false;
+    nukeBtn.disabled = false;
+    refreshBtn.disabled = false;
+    instructionInput.disabled = false;
+    editBtn.textContent = editLabel;
+    refreshBtn.textContent = refreshLabel;
+    editBtn.removeAttribute("title");
+    deployBtn.removeAttribute("title");
+    nukeBtn.removeAttribute("title");
+    refreshBtn.removeAttribute("title");
+    instructionInput.removeAttribute("title");
+    previewActions?.classList.remove("actions--disabled");
+    editActions?.classList.remove("actions--disabled");
+    if (previewActions) previewActions.removeAttribute("data-tooltip");
+    if (editActions) editActions.removeAttribute("data-tooltip");
+    if (creditStatus) {
+      creditStatus.textContent = "Credits: loading...";
+    }
+    startCreditPolling();
+  } else {
+    connectBtn.textContent = "Connect Wallet";
+    editBtn.disabled = true;
+    deployBtn.disabled = true;
+    nukeBtn.disabled = true;
+    refreshBtn.disabled = true;
+    instructionInput.disabled = true;
+    editBtn.textContent = editLabel;
+    refreshBtn.textContent = refreshLabel;
+    editBtn.title = "Connect your wallet to edit";
+    deployBtn.title = "Connect your wallet to deploy";
+    nukeBtn.title = "Connect your wallet to nuke";
+    refreshBtn.title = "Connect your wallet to refresh";
+    instructionInput.title = "Connect your wallet to enter instructions";
+    previewActions?.classList.add("actions--disabled");
+    editActions?.classList.add("actions--disabled");
+    if (previewActions) previewActions.setAttribute("data-tooltip", "Connect your wallet to use preview controls");
+    if (editActions) editActions.setAttribute("data-tooltip", "Connect your wallet to send edits");
+    stopCreditPolling();
+    if (creditStatus) {
+      creditStatus.textContent = "Connect wallet to see credits";
+    }
+  }
+}
+
 async function connectWallet() {
   const provider = getProvider();
   if (!provider) {
     log("Phantom wallet not found. Install it to continue.");
     return;
   }
+  if (state.wallet && state.publicKey) {
+    try {
+      await provider.disconnect();
+    } catch (err) {
+      log(`Wallet disconnect failed: ${err.message || err}`);
+    }
+    state.wallet = null;
+    state.publicKey = null;
+    updateWalletUi();
+    log("Wallet disconnected.");
+    return;
+  }
   try {
     const resp = await provider.connect();
     state.wallet = provider;
     state.publicKey = resp.publicKey.toString();
-    walletStatus.textContent = state.publicKey;
+    updateWalletUi();
     log("Wallet connected.");
   } catch (err) {
     log(`Wallet connection failed: ${err.message || err}`);
@@ -136,9 +209,12 @@ async function postCommand(path, body) {
     if (path === "/edit") {
       editInFlight = true;
       editBtn.disabled = true;
+      editBtn.textContent = "Working...";
+      instructionInput.disabled = true;
       refreshBtn.disabled = true;
+      refreshBtn.textContent = "Publishing...";
     }
-    const apiBase = apiBaseInput.value.trim().replace(/\/$/, "");
+    const apiBase = window.location.hostname === "localhost" ? "http://localhost:8080" : "https://api.thedailyauction.com";
     const { headers, bodyText } = await signPayload(path, body);
 
     const response = await fetch(`${apiBase}${path}`, {
@@ -154,29 +230,52 @@ async function postCommand(path, body) {
     log(`${path} ok: ${JSON.stringify(json)}`);
     if (path === "/edit") {
       setTimeout(refreshPreview, 1500);
+      refreshCredits();
+    }
+    if (path === "/nuke") {
+      setTimeout(refreshPreview, 1500);
     }
   } catch (err) {
     log(`Request failed: ${err.message || err}`);
   } finally {
     if (path === "/edit") {
       editInFlight = false;
-      editBtn.disabled = false;
-      refreshBtn.disabled = false;
+      updateWalletUi();
     }
   }
 }
 
 function renderHistory(items) {
+  const summarize = (value, limit = 180) => {
+    if (!value) return null;
+    const compact = value.replace(/\s+/g, " ").trim();
+    return compact.length > limit ? `${compact.slice(0, limit)}…` : compact;
+  };
   const lines = items.map((item) => {
     const time = new Date(item.timestamp * 1000).toISOString();
     if (item.type === "edit_request") {
-      return `[${time}] edit requested: ${item.instruction || ""}`.trim();
+      const instruction = item.instruction || "";
+      return `[${time}] edit requested: ${summarize(instruction) || ""}`.trim();
     }
     if (item.type === "edit_complete") {
       return `[${time}] edit complete: ${item.status}`;
     }
     if (item.type === "edit_error") {
       return `[${time}] edit error (${item.status}): ${item.response || ""}`.trim();
+    }
+    if (item.type === "edit_debug") {
+      const parts = [
+        `bytes=${item.bytes_written || 0}`,
+        `changed=${item.changed ? "yes" : "no"}`,
+        item.original_hash ? `orig=${item.original_hash}` : null,
+        item.updated_hash ? `updated=${item.updated_hash}` : null,
+        item.codex_stdout_len ? `stdout_len=${item.codex_stdout_len}` : null,
+        item.codex_stderr_len ? `stderr_len=${item.codex_stderr_len}` : null,
+        item.html_length ? `html_len=${item.html_length}` : null,
+        item.codex_stdout ? `stdout="${summarize(item.codex_stdout)}"` : null,
+        item.codex_stderr ? `stderr="${summarize(item.codex_stderr)}"` : null,
+      ].filter(Boolean);
+      return `[${time}] edit debug: ${parts.join(" ")}`.trim();
     }
     if (item.type === "deploy") {
       return `[${time}] deploy (${item.status}): ${item.response || ""}`.trim();
@@ -187,18 +286,24 @@ function renderHistory(items) {
     return `[${time}] ${item.type}`;
   });
   logEl.textContent = lines.join("\n");
+  logEl.scrollTop = logEl.scrollHeight;
 }
 
 async function refreshHistory() {
   try {
-    const apiBase = apiBaseInput.value.trim().replace(/\/$/, "");
+    const apiBase = window.location.hostname === "localhost" ? "http://localhost:8080" : "https://api.thedailyauction.com";
     const response = await fetch(`${apiBase}/history?limit=200`);
     if (!response.ok) {
       log(`History fetch failed: ${response.status}`);
       return;
     }
     const payload = await response.json();
-    renderHistory(payload.items || []);
+    const items = payload.items || [];
+    const signature = JSON.stringify(items.map((item) => [item.timestamp, item.type, item.status]));
+    if (signature !== lastHistorySignature) {
+      renderHistory(items);
+      lastHistorySignature = signature;
+    }
   } catch (err) {
     log(`History error: ${err.message || err}`);
   }
@@ -212,19 +317,44 @@ function startHistoryPolling() {
   historyTimer = setInterval(refreshHistory, 2000);
 }
 
-function setDefaultApiBase() {
-  if (!apiBaseInput) {
-    return;
-  }
-  if (window.location.hostname === "localhost") {
-    apiBaseInput.value = "http://localhost:8080";
-    return;
-  }
-  const prod = apiBaseInput.dataset.prod;
-  if (prod) {
-    apiBaseInput.value = prod;
+function stopCreditPolling() {
+  if (creditTimer) {
+    clearInterval(creditTimer);
+    creditTimer = null;
   }
 }
+
+async function refreshCredits() {
+  if (!state.publicKey || !creditStatus) {
+    return;
+  }
+  try {
+    const apiBase = window.location.hostname === "localhost" ? "http://localhost:8080" : "https://api.thedailyauction.com";
+    const bodyText = JSON.stringify({ wallet: state.publicKey });
+    const response = await fetch(`${apiBase}/credits`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: bodyText,
+    });
+    if (!response.ok) {
+      const body = await response.text();
+      const detail = body ? ` (${response.status})` : ` (${response.status})`;
+      creditStatus.textContent = `Credits unavailable${detail}`;
+      return;
+    }
+    const payload = await response.json();
+    creditStatus.textContent = `Credits: ${payload.remaining}/${payload.max}`;
+  } catch (err) {
+    creditStatus.textContent = "Credits unavailable";
+  }
+}
+
+function startCreditPolling() {
+  stopCreditPolling();
+  refreshCredits();
+  creditTimer = setInterval(refreshCredits, 15000);
+}
+
 
 connectBtn.addEventListener("click", connectWallet);
 editBtn.addEventListener("click", () => {
@@ -236,6 +366,7 @@ editBtn.addEventListener("click", () => {
     log("Instruction required.");
     return;
   }
+  instructionInput.value = "";
   postCommand("/edit", { instruction });
 });
 
@@ -255,14 +386,13 @@ refreshBtn.addEventListener("click", () => {
 });
 
 window.addEventListener("load", () => {
-  setDefaultApiBase();
   startHistoryPolling();
+  refreshPreview();
   const provider = getProvider();
   if (provider && provider.isConnected) {
     state.wallet = provider;
     state.publicKey = provider.publicKey?.toString() || null;
-    if (state.publicKey) {
-      walletStatus.textContent = state.publicKey;
-    }
+    updateWalletUi();
   }
+  updateWalletUi();
 });

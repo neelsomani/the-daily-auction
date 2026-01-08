@@ -207,6 +207,7 @@ export default function Home() {
   const { publicKey, sendTransaction, connected } = useWallet();
   const [secondsRemaining, setSecondsRemaining] = useState(null);
   const [winner, setWinner] = useState("Loading...");
+  const [yesterdayWinner, setYesterdayWinner] = useState("Loading...");
   const [currentPrice, setCurrentPrice] = useState("--");
   const [winnerPubkey, setWinnerPubkey] = useState(null);
   const [userBidLamports, setUserBidLamports] = useState(0n);
@@ -218,6 +219,7 @@ export default function Home() {
   const [bidSignature, setBidSignature] = useState("");
   const [copyStatus, setCopyStatus] = useState("idle");
   const [bidError, setBidError] = useState("");
+  const [previewSrc, setPreviewSrc] = useState("about:blank");
   const disabled = useMemo(
     () => String(process.env.NEXT_PUBLIC_DISABLE_SITE || "").toLowerCase() === "true",
     []
@@ -226,6 +228,7 @@ export default function Home() {
   useEffect(() => {
     setMounted(true);
     setSecondsRemaining(secondsUntilNextUtcMidnight(Date.now()));
+    setPreviewSrc(`${SITE_URL}?t=${Date.now()}`);
     const tick = () => setSecondsRemaining(secondsUntilNextUtcMidnight(Date.now()));
     const timer = setInterval(tick, 1000);
     return () => clearInterval(timer);
@@ -236,10 +239,20 @@ export default function Home() {
     const programId = process.env.NEXT_PUBLIC_AUCTION_PROGRAM_ID;
     if (!programId) {
       setWinner("Missing program ID");
+      setYesterdayWinner("Missing program ID");
       return;
     }
     const dayIndex = Math.floor(Date.now() / 1000 / SECONDS_PER_DAY);
-    const data = await fetchAuctionDay(programId, dayIndex, rpcUrl);
+    const yesterdayIndex = Math.max(0, dayIndex - 1);
+    const [data, yesterdayData] = await Promise.all([
+      fetchAuctionDay(programId, dayIndex, rpcUrl),
+      fetchAuctionDay(programId, yesterdayIndex, rpcUrl),
+    ]);
+    if (!yesterdayData || yesterdayData.highestBid === 0n) {
+      setYesterdayWinner("No bids yesterday");
+    } else {
+      setYesterdayWinner(yesterdayData.winner);
+    }
     if (!data || data.highestBid === 0n) {
       setWinner("No bids yet");
       setWinnerPubkey(null);
@@ -380,7 +393,7 @@ export default function Home() {
             The website below is untrusted. Double check any outbound links before you click.
           </p>
           <p className="banner__winner-line">
-            <span>Today’s winner:</span> <strong>{winner}</strong>
+            <span>Today’s winner:</span> <strong>{yesterdayWinner}</strong>
           </p>
         </div>
         <div className="banner__right">
@@ -416,8 +429,8 @@ export default function Home() {
           <iframe
             className="frame__iframe"
             title="Daily Auction Site"
-            src={SITE_URL}
-            sandbox="allow-same-origin allow-scripts allow-forms"
+            src={previewSrc}
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
             referrerPolicy="no-referrer"
           />
         )}

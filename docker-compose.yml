@@ -6,12 +6,16 @@ services:
       - "8080:8080"
     volumes:
       - codex_site:/app/site
+      - baseline_site:/app/baseline:ro
     environment:
       CODEX_PORT: 8080
       DEPLOY_INTERNAL_URL: http://deploy:9090
       SITE_DIR: /app/site
       MASTER_WALLET: ${MASTER_WALLET}
       MAX_REQUESTS_PER_WALLET_PER_DAY: ${MAX_REQUESTS_PER_WALLET_PER_DAY:-50}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      AUCTION_PROGRAM_ID: ${AUCTION_PROGRAM_ID}
+      RPC_URL: ${RPC_URL:-https://api.devnet.solana.com}
     depends_on:
       - deploy
 

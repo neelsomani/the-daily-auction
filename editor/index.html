@@ -3,42 +3,46 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Daily Auction Editor</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Playfair+Display:wght@500;700;800&display=swap"
+      rel="stylesheet"
+    />
+    <title>The Daily Auction - Editor</title>
+    <link
+      rel="icon"
+      type="image/svg+xml"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0%25' stop-color='%23ff8a3d'/%3E%3Cstop offset='100%25' stop-color='%23ff6a00'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='64' height='64' rx='14' fill='%23111'/%3E%3Ccircle cx='32' cy='32' r='22' fill='url(%23g)'/%3E%3Cpath d='M24 22h16v8h-6v12h-4V30h-6z' fill='%23111'/%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="style.css" />
   </head>
   <body>
     <main>
-      <header>
-        <p class="kicker">The Daily Auction</p>
-        <h1>Editor Console</h1>
-        <p class="subhead">Connect your wallet and send edit, deploy, or nuke commands.</p>
+      <header class="header-row">
+        <div>
+          <p class="kicker">The Daily Auction</p>
+          <h1>Editor Console</h1>
+          <p class="subhead">Connect your wallet and send edit, deploy, or nuke commands.</p>
+        </div>
+        <button id="connectBtn" class="primary">Connect Wallet</button>
       </header>
 
       <section class="panel">
         <div class="row">
-          <div>
-            <p class="label">Wallet</p>
-            <p id="walletStatus" class="value">Not connected</p>
-          </div>
-          <button id="connectBtn" class="primary">Connect Wallet</button>
-        </div>
-        <div class="row">
-          <label class="label" for="apiBase">Codex API base</label>
-          <input id="apiBase" type="text" value="http://localhost:8080" data-prod="https://api.thedailyauction.com" />
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="row">
           <p class="label">Preview</p>
-          <button id="refreshBtn">Refresh Preview</button>
+          <div class="actions">
+            <button id="refreshBtn">Refresh Preview</button>
+            <button id="deployBtn">Deploy to Prod</button>
+            <button id="nukeBtn" class="danger">Nuke</button>
+          </div>
         </div>
         <iframe
           id="previewFrame"
           class="preview-frame"
           title="Preview site"
-          src="https://preview.thedailyauction.app"
           data-base="https://preview.thedailyauction.app"
+          sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
         ></iframe>
       </section>
 
@@ -47,15 +51,16 @@
         <textarea id="instruction" rows="5" placeholder="Describe the edit you want..."></textarea>
         <div class="actions">
           <button id="editBtn" class="primary">Send Edit</button>
-          <button id="deployBtn">Deploy to Prod</button>
-          <button id="nukeBtn" class="danger">Nuke</button>
+        </div>
+        <div class="panel-footer">
+          <span id="creditStatus" class="credit-status">Connect wallet to see credits</span>
         </div>
       </section>
 
-      <section class="panel log">
-        <p class="label">Activity</p>
+      <details class="panel log">
+        <summary class="log__summary">Logs</summary>
         <div id="log"></div>
-      </section>
+      </details>
     </main>
 
     <script>

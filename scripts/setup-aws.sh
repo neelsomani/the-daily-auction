@@ -23,6 +23,9 @@ require_env S3_BUCKET_EDITOR
 require_env CF_DOMAIN_PREVIEW
 require_env CF_DOMAIN_PROD
 require_env CF_DOMAIN_EDITOR
+PREVIEW_FRAME_ANCESTORS=${PREVIEW_FRAME_ANCESTORS:-"https://editor.thedailyauction.com http://localhost:8000"}
+PREVIEW_FRAME_ANCESTORS="${PREVIEW_FRAME_ANCESTORS#\"}"
+PREVIEW_FRAME_ANCESTORS="${PREVIEW_FRAME_ANCESTORS%\"}"
 
 ACM_REGION="${ACM_REGION:-us-east-1}"
 ACM_CERT_ARN="${ACM_CERT_ARN:-${ACM_CERT_ARN_PREVIEW:-}}"
@@ -126,6 +129,29 @@ else
   echo "Using cache policy: $cache_policy_id"
 fi
 
+headers_policy_name="thedailyauction-preview-csp"
+headers_policy_id="$(aws cloudfront list-response-headers-policies --type custom \
+  --query "ResponseHeadersPolicyList.Items[?ResponseHeadersPolicy.ResponseHeadersPolicyConfig.Name=='$headers_policy_name'].ResponseHeadersPolicy.Id | [0]" \
+  --output text)"
+
+if [ -z "$headers_policy_id" ] || [ "$headers_policy_id" = "None" ]; then
+  csp_value="frame-ancestors ${PREVIEW_FRAME_ANCESTORS}"
+  csp_value_escaped="$(printf "%s" "$csp_value" | sed 's/"/\\"/g')"
+  headers_policy_id="$(aws cloudfront create-response-headers-policy --response-headers-policy-config '{
+    "Name": "'"$headers_policy_name"'",
+    "Comment": "Preview CSP frame-ancestors",
+    "SecurityHeadersConfig": {
+      "ContentSecurityPolicy": {
+        "Override": true,
+        "ContentSecurityPolicy": "'"$csp_value_escaped"'"
+      }
+    }
+  }' --query 'ResponseHeadersPolicy.Id' --output text)"
+  echo "Created response headers policy: $headers_policy_id"
+else
+  echo "Using response headers policy: $headers_policy_id"
+fi
+
 oac_name="thedailyauction-oac"
 oac_id="$(aws cloudfront list-origin-access-controls \
   --query "OriginAccessControlList.Items[?Name=='$oac_name'].Id | [0]" \
@@ -149,10 +175,62 @@ create_distribution() {
   local domain="$2"
   local cert_arn="$3"
   local label="$4"
+  local response_headers_policy_id="${5:-}"
+
+  local existing_id
+  existing_id="$(aws cloudfront list-distributions \
+    --query "DistributionList.Items[?Aliases.Items!=null && contains(Aliases.Items, '$domain')].Id | [0]" \
+    --output text)"
+
+  if [ -n "$existing_id" ] && [ "$existing_id" != "None" ]; then
+    echo "Using existing distribution for $domain ($existing_id)" >&2
+    if [ -n "$response_headers_policy_id" ]; then
+      local dist_config_file
+      local updated_config_file
+      local etag
+      dist_config_file="$(mktemp)"
+      updated_config_file="$(mktemp)"
+      aws cloudfront get-distribution-config --id "$existing_id" \
+        --query 'DistributionConfig' --output json >"$dist_config_file"
+      etag="$(aws cloudfront get-distribution-config --id "$existing_id" --query 'ETag' --output text)"
+
+      python3 - "$dist_config_file" "$updated_config_file" "$response_headers_policy_id" <<'PY'
+import json
+import sys
+
+src, dst, policy_id = sys.argv[1:4]
+with open(src, "r", encoding="utf-8") as handle:
+    config = json.load(handle)
+
+cache_behavior = config.get("DefaultCacheBehavior", {})
+cache_behavior["ResponseHeadersPolicyId"] = policy_id
+config["DefaultCacheBehavior"] = cache_behavior
+
+with open(dst, "w", encoding="utf-8") as handle:
+    json.dump(config, handle)
+PY
+
+      aws cloudfront update-distribution --id "$existing_id" \
+        --if-match "$etag" \
+        --distribution-config "file://$updated_config_file" >/dev/null
+
+      rm -f "$dist_config_file" "$updated_config_file"
+      echo "$existing_id|$(aws cloudfront get-distribution --id "$existing_id" --query 'Distribution.DomainName' --output text)"
+      return
+    fi
+
+    echo "$existing_id|$(aws cloudfront get-distribution --id "$existing_id" --query 'Distribution.DomainName' --output text)"
+    return
+  fi
 
   local origin_domain="${bucket}.s3.${AWS_REGION_LOWER}.amazonaws.com"
   local temp_file
   temp_file="$(mktemp)"
+
+  local response_headers_block=""
+  if [ -n "$response_headers_policy_id" ]; then
+    response_headers_block=$',\n    "ResponseHeadersPolicyId": '"\"$response_headers_policy_id\""
+  fi
 
   cat >"$temp_file" <<EOF
 {
@@ -187,7 +265,7 @@ create_distribution() {
       }
     },
     "Compress": true,
-    "CachePolicyId": "$cache_policy_id"
+    "CachePolicyId": "$cache_policy_id"$response_headers_block
   },
   "ViewerCertificate": {
     "ACMCertificateArn": "$cert_arn",
@@ -211,7 +289,7 @@ EOF
   echo "$dist_id|$dist_domain"
 }
 
-preview_result="$(create_distribution "$S3_BUCKET_PREVIEW" "$CF_DOMAIN_PREVIEW" "$ACM_CERT_ARN" "preview")"
+preview_result="$(create_distribution "$S3_BUCKET_PREVIEW" "$CF_DOMAIN_PREVIEW" "$ACM_CERT_ARN" "preview" "$headers_policy_id")"
 prod_result="$(create_distribution "$S3_BUCKET_PROD" "$CF_DOMAIN_PROD" "$ACM_CERT_ARN" "prod")"
 editor_result="$(create_distribution "$S3_BUCKET_EDITOR" "$CF_DOMAIN_EDITOR" "$ACM_CERT_ARN" "editor")"
 
@@ -227,20 +305,36 @@ account_id="$(aws sts get-caller-identity --query Account --output text)"
 apply_bucket_policy() {
   local bucket="$1"
   local dist_id="$2"
+  if [ -z "$dist_id" ] || [ "$dist_id" = "None" ]; then
+    echo "Missing distribution id for bucket policy on $bucket" >&2
+    exit 1
+  fi
   local dist_arn="arn:aws:cloudfront::$account_id:distribution/$dist_id"
-  aws s3api put-bucket-policy --bucket "$bucket" --policy '{
-    "Version": "2012-10-17",
-    "Statement": [{
+  local policy_file
+  policy_file="$(mktemp)"
+  cat >"$policy_file" <<EOF
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
       "Sid": "AllowCloudFrontReadOnly",
       "Effect": "Allow",
       "Principal": { "Service": "cloudfront.amazonaws.com" },
       "Action": "s3:GetObject",
-      "Resource": "arn:aws:s3:::'"$bucket"'/*",
+      "Resource": "arn:aws:s3:::$bucket/*",
       "Condition": {
-        "StringEquals": { "AWS:SourceArn": "'"$dist_arn"'" }
+        "StringEquals": { "AWS:SourceArn": "$dist_arn" }
       }
-    }]
-  }' >/dev/null
+    }
+  ]
+}
+EOF
+  if [ "${DEBUG_POLICY:-}" = "1" ]; then
+    echo "Bucket policy for $bucket:" >&2
+    cat "$policy_file" >&2
+  fi
+  aws s3api put-bucket-policy --bucket "$bucket" --policy "file://$policy_file" >/dev/null
+  rm -f "$policy_file"
 }
 
 apply_bucket_policy "$S3_BUCKET_PREVIEW" "$preview_id"

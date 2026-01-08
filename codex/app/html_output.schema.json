@@ -1,0 +1,8 @@
+{
+  "type": "object",
+  "properties": {
+    "html": { "type": "string" }
+  },
+  "required": ["html"],
+  "additionalProperties": false
+}
