@@ -264,8 +264,10 @@ pub mod auction {
                 ErrorCode::BidReceiptOwnerMismatch
             );
 
-            let mut data_slice: &[u8] = &bid_receipt_info.data.borrow();
-            let mut bid_receipt = BidReceipt::try_deserialize(&mut data_slice)?;
+            let mut bid_receipt = {
+                let mut data_slice: &[u8] = &bid_receipt_info.data.borrow();
+                BidReceipt::try_deserialize(&mut data_slice)?
+            };
 
             require!(
                 bid_receipt.auction_day == auction_day.key(),

@@ -6,6 +6,7 @@ from typing import Iterable, List, Optional, Tuple
 from base58 import b58decode
 from borsh_construct import Bool, CStruct, I64, U8, U32, U64
 from solana.publickey import PublicKey
+from solders.signature import Signature
 from solana.rpc.api import Client
 from solana.rpc.types import MemcmpOpts
 from solana.transaction import AccountMeta, Transaction, TransactionInstruction
@@ -280,7 +281,10 @@ def send_transaction(
     elif hasattr(resp, "value"):
         signature = str(resp.value)
     if signature:
-        client.confirm_transaction(signature)
+        try:
+            client.confirm_transaction(Signature.from_string(signature))
+        except TypeError:
+            client.confirm_transaction(signature)
     return resp
 
 
