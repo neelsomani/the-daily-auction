@@ -304,10 +304,3 @@ Message format (bytes):
 ```
 {wallet}:{nonce}:{expiry}:{path}:{sha256(body)}
 ```
-
-Signature verification uses the wallet public key (ed25519) only.
-
-### Notes
-
-- `codex/scripts/edit.sh` is a placeholder; replace it with Codex CLI integration.
-- `deploy/scripts/*` use `aws s3 sync` and require AWS credentials.

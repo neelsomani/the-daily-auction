@@ -21,6 +21,8 @@ Do not request other files or external resources. CURRENT_HTML is the entire wor
 If the command is underspecified, make the smallest reasonable assumption and proceed. Still output full HTML.
 """
 
+DEFAULT_HTML_PATH = os.environ.get("HTML_EDIT_DEFAULT_PATH", "/app/app/default_index.html")
+
 
 @dataclass(frozen=True)
 class HtmlEditConfig:
@@ -181,7 +183,13 @@ def run_html_edit(command: str, target_path: str, allowlisted_target_path: str) 
         raise HtmlEditError("target_path not allowlisted")
 
     if not os.path.exists(resolved_target):
-        raise HtmlEditError("target file not found")
+        os.makedirs(os.path.dirname(resolved_target) or ".", exist_ok=True)
+        try:
+            with open(DEFAULT_HTML_PATH, "r", encoding="utf-8") as handle:
+                default_html = handle.read()
+        except OSError as exc:
+            raise HtmlEditError("default html not found") from exc
+        atomic_write(resolved_target, default_html)
 
     config = load_default_config()
     workspace_dir = tempfile.mkdtemp(prefix="codex_ws_")
