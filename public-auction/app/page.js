@@ -430,7 +430,7 @@ export default function Home() {
             className="frame__iframe"
             title="Daily Auction Site"
             src={previewSrc}
-            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms"
+            sandbox="allow-scripts allow-popups allow-popups-to-escape-sandbox allow-forms allow-top-navigation-by-user-activation"
             referrerPolicy="no-referrer"
           />
         )}

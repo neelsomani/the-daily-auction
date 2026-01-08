@@ -8,8 +8,14 @@ const description =
 export const metadata = {
   title: "The Daily Auction",
   description,
+  openGraph: {
+    title: "The Daily Auction",
+    description,
+    images: ["/twitter-card.png"],
+  },
   twitter: {
     card: "summary_large_image",
+    site: "@neelsomani",
     title: "The Daily Auction",
     description,
     images: ["/twitter-card.png"],
