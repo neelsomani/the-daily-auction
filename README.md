@@ -147,6 +147,9 @@ Optional env vars:
 - `RETRY_WINDOW_SECONDS` (default 1800)
 - `RETRY_INTERVAL_SECONDS` (default 45)
 - `MAX_RUNTIME_SECONDS` (default 780)
+- `MASTER_WALLET` (pubkey that can do any operation on the editor)
+- `CODEX_NUKE_URL` (optional, triggers Codex nuke after settlement)
+- `MASTER_WALLET_PRIVATE_KEY` (required for nuke signing)
 
 8. Test the public auction website (Next.js)
 

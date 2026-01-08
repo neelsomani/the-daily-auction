@@ -1,8 +1,14 @@
+import base64
+import hashlib
+import json
 import math
 import os
+import secrets
 import time
 from typing import List
 
+import requests
+from nacl.signing import SigningKey
 from solana.publickey import PublicKey
 from solana.rpc.api import Client
 from solana.rpc.core import RPCException
@@ -79,6 +85,49 @@ def chunked(items: List[PublicKey], size: int) -> List[List[PublicKey]]:
 
 def log(msg: str) -> None:
     print(msg, flush=True)
+
+
+def _sign_codex_request(wallet_keypair, path: str, body: dict) -> tuple[dict, str]:
+    nonce = secrets.token_hex(16)
+    expiry = int(time.time()) + 300
+    body_text = json.dumps(body)
+    body_hash = hashlib.sha256(body_text.encode("utf-8")).hexdigest()
+    wallet = str(wallet_keypair.public_key)
+    message = f"{wallet}:{nonce}:{expiry}:{path}:{body_hash}".encode("utf-8")
+    seed = bytes(wallet_keypair.secret_key[:32])
+    signature = SigningKey(seed).sign(message).signature
+    signature_b64 = base64.b64encode(signature).decode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "X-Wallet": wallet,
+        "X-Nonce": nonce,
+        "X-Expiry": str(expiry),
+        "X-Signature": f"base64:{signature_b64}",
+    }
+    return headers, body_text
+
+
+def maybe_trigger_codex_nuke() -> None:
+    rpc_url = os.environ.get("RPC_URL", "https://api.devnet.solana.com")
+    if "devnet" in rpc_url:
+        log("nuke: skipped (devnet rpc)")
+        return
+    nuke_url = os.environ.get("CODEX_NUKE_URL")
+    key_raw = os.environ.get("MASTER_WALLET_PRIVATE_KEY")
+    if not nuke_url or not key_raw:
+        log("nuke: skipped (CODEX_NUKE_URL/MASTER_WALLET_PRIVATE_KEY not set)")
+        return
+
+    signer = parse_keypair(key_raw)
+    headers, body_text = _sign_codex_request(signer, "/nuke", {})
+    try:
+        response = requests.post(nuke_url, headers=headers, data=body_text, timeout=30)
+        if response.status_code >= 400:
+            log(f"nuke: failed ({response.status_code}): {response.text}")
+            return
+        log("nuke: ok")
+    except requests.RequestException as exc:
+        log(f"nuke: request failed: {exc}")
 
 
 def maybe_init_day(client: Client, program_id: PublicKey, signer, day_index: int) -> None:
@@ -244,6 +293,8 @@ def handler(event=None, context=None):
         max_batch_size,
         max_runtime_seconds,
     )
+
+    maybe_trigger_codex_nuke()
 
     return {"status": "ok", "day_index": target_day_index}
 

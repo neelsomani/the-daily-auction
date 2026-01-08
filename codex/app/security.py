@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 import base58
 import requests
 from nacl.exceptions import BadSignatureError
-from nacl.signing import VerifyKey
+from nacl.signing import SigningKey, VerifyKey
 from solana.publickey import PublicKey
 
 
@@ -45,7 +45,7 @@ class CreditLimiter:
         self._counts: dict[tuple[str, str], int] = {}
 
     def allow(self, wallet: str) -> bool:
-        master_wallet = os.environ.get("MASTER_WALLET", "").strip()
+        master_wallet = get_master_wallet()
         if master_wallet and wallet == master_wallet:
             return True
         day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -57,7 +57,7 @@ class CreditLimiter:
         return True
 
     def usage(self, wallet: str) -> tuple[int, int, int]:
-        master_wallet = os.environ.get("MASTER_WALLET", "").strip()
+        master_wallet = get_master_wallet()
         if master_wallet and wallet == master_wallet:
             return 0, self._max, self._max
         day = datetime.now(timezone.utc).strftime("%Y-%m-%d")
@@ -182,7 +182,7 @@ def verify_request(headers: dict[str, str], body_bytes: bytes, path: str, nonce_
     if not wallet or not nonce or not expiry_raw or not signature:
         raise ValueError("missing auth headers")
 
-    master_wallet = os.environ.get("MASTER_WALLET", "").strip()
+    master_wallet = get_master_wallet()
     if master_wallet and wallet == master_wallet:
         pass
     else:
@@ -209,3 +209,21 @@ def verify_request(headers: dict[str, str], body_bytes: bytes, path: str, nonce_
 
     nonce_store.add(nonce, expiry)
     return AuthContext(wallet=wallet, nonce=nonce, expiry=expiry)
+
+
+def get_master_wallet() -> str:
+    master_wallet = os.environ.get("MASTER_WALLET", "").strip()
+    if master_wallet:
+        return master_wallet
+    master_private = os.environ.get("MASTER_WALLET_PRIVATE_KEY", "").strip()
+    if not master_private:
+        return ""
+    try:
+        if master_private.startswith("["):
+            secret = bytes(json.loads(master_private))
+        else:
+            secret = base58.b58decode(master_private)
+        verify_key = SigningKey(secret[:32]).verify_key
+        return base58.b58encode(verify_key.encode()).decode("utf-8")
+    except (ValueError, json.JSONDecodeError) as exc:
+        raise ValueError("invalid master wallet private key") from exc

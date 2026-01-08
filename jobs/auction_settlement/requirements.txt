@@ -1,3 +1,5 @@
 base58==2.1.1
 borsh-construct==0.1.0
+PyNaCl==1.5.0
+requests==2.32.3
 solana==0.28.1
