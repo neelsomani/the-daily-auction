@@ -35,20 +35,21 @@ Codex env vars (in `.env`):
 - `HTML_EDIT_MIN_CHARS` (optional, default `200`)
 - `HTML_EDIT_MAX_CHARS` (optional, default `2000000`)
 - `HTML_EDIT_TIMEOUT_SECONDS` (optional, default `180`)
-- `AUCTION_PROGRAM_ID` (required to authorize yesterday's winner)
+- `AUCTION_PROGRAM_ID` (required to authorize yesterday's winner - set in step 6)
 - `RPC_URL` (optional, default devnet)
 
-5. Run the editor locally:
+5. Run the editor locally using your master wallet:
 
 ```
 cd editor
 python3 -m http.server 8000
 ```
 
-Production hosting note:
+Production hosting notes:
 - Deploy Codex + Deploy on a single EC2 instance with Docker Compose (Codex public, Deploy internal-only). Other setups are possible, but EC2 is the assumed default.
-- There is a convenience helper to set things up within the EC2 instance: `sudo DOMAIN=api.thedailyauction.com APP_DIR=/opt/the-daily-auction ./scripts/setup-ec2.sh`
-- `api.thedailyauction.com` should point to the port 443 on the EC2 instance, which forwards to the Codex server.
+- You need both ports 80 and 443 open
+- There is a convenience helper to set things up within the EC2 instance: `sudo DOMAIN=api.thedailyauction.com ./scripts/setup-ec2.sh`
+- The A record of `api.thedailyauction.com` should point to the Elastic IP of the EC2 instance, which forwards to the Codex server.
 - Keep Deploy internal-only.
 - Run `./scripts/publish-editor.sh` to deploy the editor remotely
 
@@ -110,6 +111,8 @@ anchor deploy
 ```
 
 The program implements the spec in `docs/solana-auction-spec.md`.
+
+At this point, you can set AUCTION_PROGRAM_ID in your `.env`. Your local Codex container will allow the on-chain auction winner to make edits.
 
 7. Deploy the nightly settlement job to AWS Lambda
 
